@@ -1,0 +1,174 @@
+package org.vaadin.example;
+
+import java.lang.reflect.Field;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
+
+import com.vaadin.flow.component.crud.CrudFilter;
+import com.vaadin.flow.data.provider.AbstractBackEndDataProvider;
+import com.vaadin.flow.data.provider.Query;
+import com.vaadin.flow.data.provider.SortDirection;
+
+import static java.util.Comparator.naturalOrder;
+
+// Contact data provider
+public class ContactDataProvider
+        extends AbstractBackEndDataProvider<Contact, CrudFilter> {
+
+    // A real app should hook up something like JPA
+    static final List<Contact> DATABASE = new ArrayList<>(getData());
+
+    private Consumer<Long> sizeChangeListener;
+
+    @Override
+    protected Stream<Contact> fetchFromBackEnd(Query<Contact, CrudFilter> query) {
+        int offset = query.getOffset();
+        int limit = query.getLimit();
+
+        Stream<Contact> stream = DATABASE.stream();
+
+        if (query.getFilter().isPresent()) {
+            stream = stream.filter(predicate(query.getFilter().get()))
+                    .sorted(comparator(query.getFilter().get()));
+        }
+
+        return stream.skip(offset).limit(limit);
+    }
+
+    @Override
+    protected int sizeInBackEnd(Query<Contact, CrudFilter> query) {
+        // For RDBMS just execute a SELECT COUNT(*) ... WHERE query
+        long count = fetchFromBackEnd(query).count();
+
+        if (sizeChangeListener != null) {
+            sizeChangeListener.accept(count);
+        }
+
+        return (int) count;
+    }
+
+    void setSizeChangeListener(Consumer<Long> listener) {
+        sizeChangeListener = listener;
+    }
+
+    private static Predicate<Contact> predicate(CrudFilter filter) {
+        // For RDBMS just generate a WHERE clause
+        return filter.getConstraints().entrySet().stream()
+                .map(constraint -> (Predicate<Contact>) Contact -> {
+                    try {
+                        Object value = valueOf(constraint.getKey(), Contact);
+                        return value != null && value.toString().toLowerCase()
+                                .contains(constraint.getValue().toLowerCase());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        return false;
+                    }
+                }).reduce(Predicate::and).orElse(e -> true);
+    }
+
+    private static Comparator<Contact> comparator(CrudFilter filter) {
+        // For RDBMS just generate an ORDER BY clause
+        return filter.getSortOrders().entrySet().stream().map(sortClause -> {
+            try {
+                Comparator<Contact> comparator = Comparator.comparing(
+                        Contact -> (Comparable) valueOf(sortClause.getKey(),
+                                Contact));
+
+                if (sortClause.getValue() == SortDirection.DESCENDING) {
+                    comparator = comparator.reversed();
+                }
+
+                return comparator;
+
+            } catch (Exception ex) {
+                return (Comparator<Contact>) (o1, o2) -> 0;
+            }
+        }).reduce(Comparator::thenComparing).orElse((o1, o2) -> 0);
+    }
+
+    private static Object valueOf(String fieldName, Contact Contact) {
+        try {
+            Field field = Contact.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return field.get(Contact);
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    void persist(Contact item) {
+        if (item.getId() == null) {
+            item.setId(DATABASE.stream().map(Contact::getId).max(naturalOrder())
+                    .orElse(0) + 1);
+        }
+
+        boolean emailExists = DATABASE.stream()
+                .anyMatch(contact -> !contact.getId().equals(item.getId()) && contact.getEmail().equals(item.getEmail()));
+
+        if (emailExists) {
+            throw new IllegalArgumentException("Email already exists!");
+        }
+
+        boolean phoneExists = DATABASE.stream()
+                .anyMatch(contact -> !contact.getId().equals(item.getId()) && contact.getPhone().equals(item.getPhone()));
+
+        if (phoneExists) {
+            throw new IllegalArgumentException("Phone number already exists!");
+        }
+
+        final Optional<Contact> existingItem = find(item.getId());
+        if (existingItem.isPresent()) {
+            Contact existingContact = existingItem.get();
+
+            if(!existingContact.getLastModified().equals(item.getLastModified())) {
+                throw new IllegalArgumentException("This contact was modified by another user!");
+            }
+
+            item.setLastModified(Instant.now());
+
+            int position = DATABASE.indexOf(existingItem.get());
+            DATABASE.remove(existingItem.get());
+            DATABASE.add(position, item);
+        } else {
+            item.setLastModified(Instant.now());
+            DATABASE.add(item);
+        }
+
+        ContactChangeBroadcaster.broadcast(item);
+    }
+
+    Optional<Contact> find(Integer id) {
+        return DATABASE.stream().filter(entity -> entity.getId().equals(id))
+                .findFirst();
+    }
+
+    void delete(Contact item) {
+        DATABASE.removeIf(entity -> entity.getId().equals(item.getId()));
+        ContactChangeBroadcaster.broadcast(item);
+    }
+
+    public static List<Contact> getData(){
+        List<Contact> contactList = new ArrayList<>();
+        contactList.add(new Contact(1, "Alice Johnson", "123 Maple St", "Los Angeles", "USA", "2134567890", "alice.johnson@example.com"));
+        contactList.add(new Contact(2, "Bob Smith", "45 King Road", "Chicago", "USA", "3129876543", "bob.smith@example.com"));
+        contactList.add(new Contact(3, "Charlie Davis", "78 Oak Avenue", "Houston", "USA", "7134563210", "charlie.davis@example.com"));
+        contactList.add(new Contact(4, "Diana Moore", "9 Elm Street", "San Francisco", "USA", "4157654321", "diana.moore@example.com"));
+        contactList.add(new Contact(5, "Ethan Brown", "150 River Blvd", "New York", "USA", "9172345678", "ethan.brown@example.com"));
+        contactList.add(new Contact(6, "Fiona White", "222 Sunset Dr", "Miami", "USA", "3056781234", "fiona.white@example.com"));
+        contactList.add(new Contact(7, "George Miller", "300 Pine Lane", "Seattle", "USA", "2068904321", "george.miller@example.com"));
+        contactList.add(new Contact(8, "Hannah Green", "10 Cedar Circle", "Boston", "USA", "6174560987", "hannah.green@example.com"));
+        return contactList;
+    }
+
+    public Optional<Contact> findById(Integer id) {
+        return DATABASE.stream()
+                .filter(contact -> contact.getId().equals(id))
+                .findFirst();
+    }
+}
