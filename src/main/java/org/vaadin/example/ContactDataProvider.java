@@ -19,9 +19,8 @@ import static java.util.Comparator.naturalOrder;
 
 // Contact data provider
 public class ContactDataProvider
-        extends AbstractBackEndDataProvider<Contact, CrudFilter> {
+        extends AbstractBackEndDataProvider<Contact, CrudFilter> implements ContactService{
 
-    // A real app should hook up something like JPA
     static final List<Contact> DATABASE = new ArrayList<>(getData());
 
     private Consumer<Long> sizeChangeListener;
@@ -51,10 +50,6 @@ public class ContactDataProvider
         }
 
         return (int) count;
-    }
-
-    void setSizeChangeListener(Consumer<Long> listener) {
-        sizeChangeListener = listener;
     }
 
     private static Predicate<Contact> predicate(CrudFilter filter) {
@@ -102,7 +97,8 @@ public class ContactDataProvider
         }
     }
 
-    void persist(Contact item) {
+    @Override
+    public void persist(Contact item) {
         if (item.getId() == null) {
             item.setId(DATABASE.stream().map(Contact::getId).max(naturalOrder())
                     .orElse(0) + 1);
@@ -143,12 +139,14 @@ public class ContactDataProvider
         ContactChangeBroadcaster.broadcast(item);
     }
 
-    Optional<Contact> find(Integer id) {
+    @Override
+    public Optional<Contact> find(Integer id) {
         return DATABASE.stream().filter(entity -> entity.getId().equals(id))
                 .findFirst();
     }
 
-    void delete(Contact item) {
+    @Override
+    public void delete(Contact item) {
         DATABASE.removeIf(entity -> entity.getId().equals(item.getId()));
         ContactChangeBroadcaster.broadcast(item);
     }
@@ -166,6 +164,7 @@ public class ContactDataProvider
         return contactList;
     }
 
+    @Override
     public Optional<Contact> findById(Integer id) {
         return DATABASE.stream()
                 .filter(contact -> contact.getId().equals(id))

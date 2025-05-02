@@ -36,19 +36,16 @@ public class MainView extends VerticalLayout {
     private Crud<Contact> crud;
     private ContactDataProvider dataProvider;
     private Registration broadcasterRegistration;
-    private Span totalCountSpan = new Span(); // Displays total contacts count
-//    private boolean isEditorConflicted = false;
-
+    private Span totalCountSpan = new Span();
+    private DatabaseContactDataProvider databaseContactDataProvider;
+    private boolean useDatabase = false;
+    private HorizontalLayout toolbar;
 
     private String NAME = "name";
-    private String STREET = "street";
-    private String CITY = "city";
-    private String COUNTRY = "country";
     private String PHONE_NUMBER = "phone";
     private String EMAIL = "email";
 
     public MainView() {
-        dataProvider = new ContactDataProvider();
         crud = new Crud<>(Contact.class, createEditor());
 
         setupDataProvider();
@@ -66,17 +63,15 @@ public class MainView extends VerticalLayout {
             if (editingContact != null && editingContact.getId() != null
                     && editingContact.getId().equals(updatedContact.getId())) {
 
-//                isEditorConflicted = true;
-
                 Notification.show("Warning: This record was updated by someone else. Please re-open the Editor.",
                                 5000, Notification.Position.BOTTOM_CENTER)
                         .addThemeVariants(NotificationVariant.LUMO_ERROR);
 
-//                crud.edit(null, Crud.EditMode.EXISTING_ITEM);
                 crud.getSaveButton().setEnabled(false);
+                crud.getDeleteButton().setEnabled(false);
             }
-
             crud.getGrid().getDataProvider().refreshAll();
+            updateTotalCount();
         }));
     }
 
@@ -132,61 +127,55 @@ public class MainView extends VerticalLayout {
                 .bind(Contact::getPhone, Contact::setPhone);
         binder.forField(email).asRequired("Email is required")
                 .withValidator(new EmailValidator("Please enter a valid email address"))
-//                .withValidator(emailAddress -> isEmailUnique(emailAddress, crud.getEditor().getItem()), // binder.getBean()
-//                        "Email already exists!")
+                .withValidator(emailAddress -> isEmailUnique(emailAddress, crud.getEditor().getItem()), // binder.getBean()
+                        "Email already exists!")
                 .bind(Contact::getEmail, Contact::setEmail);
 
         return new BinderCrudEditor<>(binder, form);
     }
 
     private void setupDataProvider(){
-        crud.setDataProvider(dataProvider);
-        crud.addDeleteListener(
-                deleteEvent -> {
-                    dataProvider.delete(deleteEvent.getItem());
+        if (useDatabase) {
+            try {
+                databaseContactDataProvider = new DatabaseContactDataProvider(DatabaseConfig.getConnection());
+                crud.setDataProvider(databaseContactDataProvider);
+                crud.addDeleteListener(deleteEvent -> {
+                    databaseContactDataProvider.delete(deleteEvent.getItem());
                     updateTotalCount();
+
                 });
-        crud.addSaveListener(
-                saveEvent -> {
+                crud.addSaveListener(saveEvent -> {
                     try {
-                        dataProvider.persist(saveEvent.getItem());
+                        databaseContactDataProvider.persist(saveEvent.getItem());
+                        updateTotalCount();
                     } catch (IllegalArgumentException e) {
                         Notification notification = Notification.show(e.getMessage());
-                        notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
-                        notification.setPosition(Notification.Position.BOTTOM_CENTER);
-                        notification.setDuration(3000);
-//                        crud.edit(saveEvent.getItem(), Crud.EditMode.EXISTING_ITEM);
                     }
                 });
-
-//        crud.addSaveListener(saveEvent -> {
-//            if (isEditorConflicted) {
-//                Notification.show("Save blocked! Someone else updated this record. Please close and reopen the editor.",
-//                                5000, Notification.Position.BOTTOM_CENTER)
-//                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
-//                crud.edit(saveEvent.getItem(), Crud.EditMode.EXISTING_ITEM);
-//                return; // Don't proceed with saving
-//            }
-//
-//            Contact contact = saveEvent.getItem();
-//            Optional<Contact> latestOpt = dataProvider.findById(contact.getId());
-//
-//            if (latestOpt.isPresent()) {
-//                Contact latest = latestOpt.get();
-//                if (!Objects.equals(contact.getLastModified(), latest.getLastModified())) {
-//                    Notification.show("Conflict detected! Someone else updated this record.",
-//                                    5000, Notification.Position.BOTTOM_CENTER)
-//                            .addThemeVariants(NotificationVariant.LUMO_ERROR);
-//                    crud.edit(latest, Crud.EditMode.EXISTING_ITEM); // re-open latest version
-//                    return;
-//                }
-//            }
-//
-//            contact.setLastModified(Instant.now());
-//            dataProvider.persist(contact);
-//            ContactChangeBroadcaster.broadcast(contact);
-//            updateTotalCount();
-//        });
+            } catch (Exception e) {
+                Notification notification = Notification.show("Database connection failed: " + e.getMessage());
+            }
+        } else {
+            dataProvider = new ContactDataProvider();
+            crud.setDataProvider(dataProvider);
+            crud.addDeleteListener(
+                    deleteEvent -> {
+                        dataProvider.delete(deleteEvent.getItem());
+                        updateTotalCount();
+                    });
+            crud.addSaveListener(
+                    saveEvent -> {
+                        try {
+                            dataProvider.persist(saveEvent.getItem());
+                            updateTotalCount();
+                        } catch (IllegalArgumentException e) {
+                            Notification notification = Notification.show(e.getMessage());
+                            notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
+                            notification.setPosition(Notification.Position.BOTTOM_CENTER);
+                            notification.setDuration(3000);
+                        }
+                    });
+        }
     }
 
     private void setupToolbar() {
@@ -198,32 +187,64 @@ public class MainView extends VerticalLayout {
         button.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
         crud.setNewButton(button);
 
-        HorizontalLayout toolbar = new HorizontalLayout(totalCountSpan);
+        Button toggleButton = new Button("Switch to " + (useDatabase ? "In-Memory" : "Database"));
+        toggleButton.addClickListener(event -> {
+            useDatabase = !useDatabase;
+            remove(crud);
+            remove(toolbar);
+            crud = new Crud<>(Contact.class, createEditor());
+            setupDataProvider();
+            setupGrid();
+            setupToolbar();
+
+            add(toolbar, crud);
+        });
+        toggleButton.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
+
+        // Combine buttons in a layout
+        HorizontalLayout buttonsLayout = new HorizontalLayout(toggleButton);
+        buttonsLayout.setSpacing(true);
+//        crud.setNewButton(buttonsLayout);
+
+        toolbar = new HorizontalLayout(totalCountSpan, buttonsLayout);
         toolbar.setAlignItems(FlexComponent.Alignment.CENTER);
-        toolbar.setFlexGrow(1, toolbar);
-        toolbar.setSpacing(false);
-        crud.setToolbar(toolbar);
+//        toolbar.setFlexGrow(1, toolbar);
+//        toolbar.setSpacing(false);
+//        crud.setToolbar(toolbar);
+
+        toolbar.setWidthFull();
+        toolbar.setJustifyContentMode(JustifyContentMode.BETWEEN);
+
+        add(toolbar);
     }
 
     private void updateTotalCount() {
-        totalCountSpan.setText("Total: " + dataProvider.DATABASE.size() + " contacts");
+        int count = useDatabase ? databaseContactDataProvider.findAllContacts().size() : dataProvider.DATABASE.size();
+        totalCountSpan.setText("Total: " + count + " contacts");
     }
+
 
     private boolean isPhoneUnique(String phoneNumber, Contact currentContact) {
         if (phoneNumber == null || phoneNumber.isEmpty()) {
-            return true; // don't validate empty value here, already handled by asRequired()
+            return true;
         }
-        return ContactDataProvider.DATABASE.stream()
-                .filter(contact -> !contact.equals(currentContact)) // skip self
+
+        List<Contact> allContacts = useDatabase ? databaseContactDataProvider.findAllContacts() : ContactDataProvider.DATABASE;
+
+        return allContacts.stream()
+                .filter(contact -> !contact.equals(currentContact))
                 .noneMatch(contact -> contact.getPhone().equals(phoneNumber));
     }
 
     private boolean isEmailUnique(String emailAddress, Contact currentContact) {
         if (emailAddress == null || emailAddress.isEmpty()) {
-            return true; // don't validate empty value here, already handled by asRequired()
+            return true;
         }
-        return ContactDataProvider.DATABASE.stream()
-                .filter(contact -> !contact.equals(currentContact)) // skip self
+
+        List<Contact> allContacts = useDatabase ? databaseContactDataProvider.findAllContacts() : ContactDataProvider.DATABASE;
+
+        return allContacts.stream()
+                .filter(contact -> !contact.equals(currentContact))
                 .noneMatch(contact -> contact.getEmail().equals(emailAddress));
     }
 }
