@@ -29,18 +29,8 @@ public class DatabaseContactDataProvider extends AbstractBackEndDataProvider<Con
     @Override
     public void persist(Contact contact) {
         try {
-            // Check for email uniqueness
-            if (emailExists(contact.getEmail(), contact.getId())) {
-                throw new IllegalArgumentException("Email already exists!");
-            }
-
-            // Check for phone uniqueness
-            if (phoneExists(contact.getPhone(), contact.getId())) {
-                throw new IllegalArgumentException("Phone number already exists!");
-            }
 
             if (contact.getId() == null) {
-                // INSERT
                 String insertSql = "INSERT INTO contacts (name, street, city, country, phone, email, last_modified) " +
                         "VALUES (?, ?, ?, ?, ?, ?, ?)";
                 try (PreparedStatement stmt = connection.prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)) {
@@ -62,7 +52,6 @@ public class DatabaseContactDataProvider extends AbstractBackEndDataProvider<Con
                     }
                 }
             } else {
-                // UPDATE
                 Contact existing = find(contact.getId()).orElseThrow(() ->
                         new IllegalArgumentException("Contact not found"));
 
@@ -125,32 +114,6 @@ public class DatabaseContactDataProvider extends AbstractBackEndDataProvider<Con
         }
 
         ContactChangeBroadcaster.broadcast(contact);
-    }
-
-    private boolean emailExists(String email, Integer idToExclude) throws SQLException {
-        String sql = "SELECT COUNT(*) FROM contacts WHERE email = ? AND (id <> ? OR ? IS NULL)";
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, email);
-            stmt.setObject(2, idToExclude);
-            stmt.setObject(3, idToExclude);
-            try (ResultSet rs = stmt.executeQuery()) {
-                rs.next();
-                return rs.getInt(1) > 0;
-            }
-        }
-    }
-
-    private boolean phoneExists(String phone, Integer idToExclude) throws SQLException {
-        String sql = "SELECT COUNT(*) FROM contacts WHERE phone = ? AND (id <> ? OR ? IS NULL)";
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, phone);
-            stmt.setObject(2, idToExclude);
-            stmt.setObject(3, idToExclude);
-            try (ResultSet rs = stmt.executeQuery()) {
-                rs.next();
-                return rs.getInt(1) > 0;
-            }
-        }
     }
 
     private Contact mapRow(ResultSet rs) throws SQLException {

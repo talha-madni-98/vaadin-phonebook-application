@@ -139,43 +139,38 @@ public class MainView extends VerticalLayout {
             try {
                 databaseContactDataProvider = new DatabaseContactDataProvider(DatabaseConfig.getConnection());
                 crud.setDataProvider(databaseContactDataProvider);
-                crud.addDeleteListener(deleteEvent -> {
-                    databaseContactDataProvider.delete(deleteEvent.getItem());
-                    updateTotalCount();
-
-                });
-                crud.addSaveListener(saveEvent -> {
-                    try {
-                        databaseContactDataProvider.persist(saveEvent.getItem());
-                        updateTotalCount();
-                    } catch (IllegalArgumentException e) {
-                        Notification notification = Notification.show(e.getMessage());
-                    }
-                });
+                setupCrudListeners(databaseContactDataProvider);
             } catch (Exception e) {
                 Notification notification = Notification.show("Database connection failed: " + e.getMessage());
             }
         } else {
             dataProvider = new ContactDataProvider();
             crud.setDataProvider(dataProvider);
-            crud.addDeleteListener(
-                    deleteEvent -> {
-                        dataProvider.delete(deleteEvent.getItem());
-                        updateTotalCount();
-                    });
-            crud.addSaveListener(
-                    saveEvent -> {
-                        try {
-                            dataProvider.persist(saveEvent.getItem());
-                            updateTotalCount();
-                        } catch (IllegalArgumentException e) {
-                            Notification notification = Notification.show(e.getMessage());
-                            notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
-                            notification.setPosition(Notification.Position.BOTTOM_CENTER);
-                            notification.setDuration(3000);
-                        }
-                    });
+            setupCrudListeners(dataProvider);
         }
+    }
+
+    private void setupCrudListeners(ContactService provider){
+        crud.addDeleteListener(deleteEvent -> {
+            provider.delete(deleteEvent.getItem());
+            updateTotalCount();
+
+        });
+        crud.addSaveListener(saveEvent -> {
+            try {
+                provider.persist(saveEvent.getItem());
+                updateTotalCount();
+            } catch (IllegalArgumentException e) {
+                Notification notification = Notification.show(e.getMessage());
+                notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
+                notification.setPosition(Notification.Position.BOTTOM_CENTER);
+                notification.setDuration(3000);
+            }
+        });
+        crud.addCancelListener(saveEvent -> {
+            crud.getSaveButton().setEnabled(true);
+            crud.getDeleteButton().setEnabled(true);
+        });
     }
 
     private void setupToolbar() {
@@ -222,7 +217,6 @@ public class MainView extends VerticalLayout {
         int count = useDatabase ? databaseContactDataProvider.findAllContacts().size() : dataProvider.DATABASE.size();
         totalCountSpan.setText("Total: " + count + " contacts");
     }
-
 
     private boolean isPhoneUnique(String phoneNumber, Contact currentContact) {
         if (phoneNumber == null || phoneNumber.isEmpty()) {
