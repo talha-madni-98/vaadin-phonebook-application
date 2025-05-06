@@ -2,6 +2,8 @@ package org.vaadin.example;
 
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.Html;
+import com.vaadin.flow.component.HtmlComponent;
+import com.vaadin.flow.component.Text;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.crud.BinderCrudEditor;
@@ -9,7 +11,9 @@ import com.vaadin.flow.component.crud.Crud;
 import com.vaadin.flow.component.crud.CrudEditor;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
@@ -29,6 +33,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 @Route("")
 public class MainView extends VerticalLayout {
@@ -63,9 +68,7 @@ public class MainView extends VerticalLayout {
             if (editingContact != null && editingContact.getId() != null
                     && editingContact.getId().equals(updatedContact.getId())) {
 
-                Notification.show("Warning: This record was updated by someone else. Please re-open the Editor.",
-                                5000, Notification.Position.BOTTOM_CENTER)
-                        .addThemeVariants(NotificationVariant.LUMO_ERROR);
+                showNotification();
 
                 crud.getSaveButton().setEnabled(false);
                 crud.getDeleteButton().setEnabled(false);
@@ -73,6 +76,29 @@ public class MainView extends VerticalLayout {
             crud.getGrid().getDataProvider().refreshAll();
             updateTotalCount();
         }));
+    }
+
+    private void showNotification() {
+        Notification notification = new Notification();
+        notification.addThemeVariants(NotificationVariant.LUMO_WARNING);
+
+        Div text = new Div(new Text(
+                "This record was updated by someone else."),
+                new HtmlComponent("br"),
+                new Text("Please re-open the Editor."));
+
+        Button closeButton = new Button(new Icon("lumo", "cross"));
+        closeButton.addThemeVariants(ButtonVariant.LUMO_TERTIARY_INLINE);
+        closeButton.setAriaLabel("Close");
+        closeButton.addClickListener(event -> {
+            notification.close();
+        });
+
+        HorizontalLayout layout = new HorizontalLayout(text, closeButton);
+        layout.setAlignItems(Alignment.CENTER);
+
+        notification.add(layout);
+        notification.open();
     }
 
     @Override
@@ -223,9 +249,9 @@ public class MainView extends VerticalLayout {
             return true;
         }
 
-        List<Contact> allContacts = useDatabase ? databaseContactDataProvider.findAllContacts() : ContactDataProvider.DATABASE;
+        Stream<Contact> allContacts = useDatabase ? databaseContactDataProvider.findAllContacts().stream() : ContactDataProvider.DATABASE.values().stream();
 
-        return allContacts.stream()
+        return allContacts
                 .filter(contact -> !contact.equals(currentContact))
                 .noneMatch(contact -> contact.getPhone().equals(phoneNumber));
     }
@@ -235,9 +261,9 @@ public class MainView extends VerticalLayout {
             return true;
         }
 
-        List<Contact> allContacts = useDatabase ? databaseContactDataProvider.findAllContacts() : ContactDataProvider.DATABASE;
+        Stream<Contact> allContacts = useDatabase ? databaseContactDataProvider.findAllContacts().stream() : ContactDataProvider.DATABASE.values().stream();
 
-        return allContacts.stream()
+        return allContacts
                 .filter(contact -> !contact.equals(currentContact))
                 .noneMatch(contact -> contact.getEmail().equals(emailAddress));
     }

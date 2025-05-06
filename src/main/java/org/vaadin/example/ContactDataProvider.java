@@ -2,10 +2,8 @@ package org.vaadin.example;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -21,7 +19,7 @@ import static java.util.Comparator.naturalOrder;
 public class ContactDataProvider
         extends AbstractBackEndDataProvider<Contact, CrudFilter> implements ContactService{
 
-    static final List<Contact> DATABASE = new ArrayList<>(getData());
+    static final Map<Integer, Contact> DATABASE = new ConcurrentHashMap<>(getData());
 
     private Consumer<Long> sizeChangeListener;
 
@@ -30,7 +28,7 @@ public class ContactDataProvider
         int offset = query.getOffset();
         int limit = query.getLimit();
 
-        Stream<Contact> stream = DATABASE.stream();
+        Stream<Contact> stream = DATABASE.values().stream();
 
         if (query.getFilter().isPresent()) {
             stream = stream.filter(predicate(query.getFilter().get()))
@@ -100,18 +98,17 @@ public class ContactDataProvider
     @Override
     public void persist(Contact item) {
         if (item.getId() == null) {
-            item.setId(DATABASE.stream().map(Contact::getId).max(naturalOrder())
-                    .orElse(0) + 1);
+            item.setId(DATABASE.keySet().stream().max(Integer::compareTo).orElse(0) + 1);
         }
 
-        boolean emailExists = DATABASE.stream()
+        boolean emailExists = DATABASE.values().stream()
                 .anyMatch(contact -> !contact.getId().equals(item.getId()) && contact.getEmail().equals(item.getEmail()));
 
         if (emailExists) {
             throw new IllegalArgumentException("Email already exists!");
         }
 
-        boolean phoneExists = DATABASE.stream()
+        boolean phoneExists = DATABASE.values().stream()
                 .anyMatch(contact -> !contact.getId().equals(item.getId()) && contact.getPhone().equals(item.getPhone()));
 
         if (phoneExists) {
@@ -122,52 +119,36 @@ public class ContactDataProvider
         if (existingItem.isPresent()) {
             Contact existingContact = existingItem.get();
 
-            if(!existingContact.getLastModified().equals(item.getLastModified())) {
+            if (!existingContact.getLastModified().equals(item.getLastModified())) {
                 throw new IllegalArgumentException("This contact was modified by another user!");
             }
-
-            item.setLastModified(Instant.now());
-
-            int position = DATABASE.indexOf(existingItem.get());
-            DATABASE.remove(existingItem.get());
-            DATABASE.add(position, item);
-        } else {
-            item.setLastModified(Instant.now());
-            DATABASE.add(item);
         }
-
+        item.setLastModified(Instant.now());
+        DATABASE.put(item.getId(), item);
         ContactChangeBroadcaster.broadcast(item);
     }
 
     @Override
     public Optional<Contact> find(Integer id) {
-        return DATABASE.stream().filter(entity -> entity.getId().equals(id))
-                .findFirst();
+        return Optional.ofNullable(DATABASE.get(id));
     }
 
     @Override
     public void delete(Contact item) {
-        DATABASE.removeIf(entity -> entity.getId().equals(item.getId()));
+        DATABASE.remove(item.getId());
         ContactChangeBroadcaster.broadcast(item);
     }
 
-    public static List<Contact> getData(){
-        List<Contact> contactList = new ArrayList<>();
-        contactList.add(new Contact(1, "Alice Johnson", "123 Maple St", "Los Angeles", "USA", "2134567890", "alice.johnson@example.com"));
-        contactList.add(new Contact(2, "Bob Smith", "45 King Road", "Chicago", "USA", "3129876543", "bob.smith@example.com"));
-        contactList.add(new Contact(3, "Charlie Davis", "78 Oak Avenue", "Houston", "USA", "7134563210", "charlie.davis@example.com"));
-        contactList.add(new Contact(4, "Diana Moore", "9 Elm Street", "San Francisco", "USA", "4157654321", "diana.moore@example.com"));
-        contactList.add(new Contact(5, "Ethan Brown", "150 River Blvd", "New York", "USA", "9172345678", "ethan.brown@example.com"));
-        contactList.add(new Contact(6, "Fiona White", "222 Sunset Dr", "Miami", "USA", "3056781234", "fiona.white@example.com"));
-        contactList.add(new Contact(7, "George Miller", "300 Pine Lane", "Seattle", "USA", "2068904321", "george.miller@example.com"));
-        contactList.add(new Contact(8, "Hannah Green", "10 Cedar Circle", "Boston", "USA", "6174560987", "hannah.green@example.com"));
-        return contactList;
-    }
-
-    @Override
-    public Optional<Contact> findById(Integer id) {
-        return DATABASE.stream()
-                .filter(contact -> contact.getId().equals(id))
-                .findFirst();
+    public static Map<Integer, Contact> getData(){
+        Map<Integer, Contact> contactMap = new ConcurrentHashMap<>();
+        contactMap.put(1, new Contact(1, "Alice Johnson", "123 Maple St", "Los Angeles", "USA", "2134567890", "alice.johnson@example.com"));
+        contactMap.put(2, new Contact(2, "Bob Smith", "45 King Road", "Chicago", "USA", "3129876543", "bob.smith@example.com"));
+        contactMap.put(3, new Contact(3, "Charlie Davis", "78 Oak Avenue", "Houston", "USA", "7134563210", "charlie.davis@example.com"));
+        contactMap.put(4, new Contact(4, "Diana Moore", "9 Elm Street", "San Francisco", "USA", "4157654321", "diana.moore@example.com"));
+        contactMap.put(5, new Contact(5, "Ethan Brown", "150 River Blvd", "New York", "USA", "9172345678", "ethan.brown@example.com"));
+        contactMap.put(6, new Contact(6, "Fiona White", "222 Sunset Dr", "Miami", "USA", "3056781234", "fiona.white@example.com"));
+        contactMap.put(7, new Contact(7, "George Miller", "300 Pine Lane", "Seattle", "USA", "2068904321", "george.miller@example.com"));
+        contactMap.put(8, new Contact(8, "Hannah Green", "10 Cedar Circle", "Boston", "USA", "6174560987", "hannah.green@example.com"));
+        return contactMap;
     }
 }

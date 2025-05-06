@@ -99,11 +99,6 @@ public class DatabaseContactDataProvider extends AbstractBackEndDataProvider<Con
     }
 
     @Override
-    public Optional<Contact> findById(Integer id) {
-        return find(id);
-    }
-
-    @Override
     public void delete(Contact contact) {
         String sql = "DELETE FROM contacts WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {

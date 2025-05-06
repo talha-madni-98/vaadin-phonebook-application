@@ -18,7 +18,7 @@ public class ContactDataProviderTest {
     public void setUp() {
         provider = new ContactDataProvider();
         ContactDataProvider.DATABASE.clear(); // Reset between tests
-        ContactDataProvider.DATABASE.addAll(ContactDataProvider.getData());
+        ContactDataProvider.DATABASE.putAll(ContactDataProvider.getData());
     }
 
     @Test
@@ -43,7 +43,7 @@ public class ContactDataProviderTest {
 
     @Test
     public void testPersist_updateExistingContact_successfully() {
-        Contact existing = ContactDataProvider.DATABASE.get(0);
+        Contact existing = getAnyExistingContact();
         Instant originalModified = existing.getLastModified();
 
         Contact updated = new Contact(existing.getId(), "Updated Name", existing.getStreet(), existing.getCity(), existing.getCountry(), existing.getPhone(), existing.getEmail());
@@ -58,7 +58,7 @@ public class ContactDataProviderTest {
 
     @Test
     public void testPersist_duplicateEmail_throwsException() {
-        Contact existing = ContactDataProvider.DATABASE.get(0);
+        Contact existing = getAnyExistingContact();
         Contact duplicate = new Contact(null, "Another Person", "Street", "City", "Country", "1231112222", existing.getEmail());
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> provider.persist(duplicate));
@@ -67,7 +67,7 @@ public class ContactDataProviderTest {
 
     @Test
     public void testPersist_duplicatePhone_throwsException() {
-        Contact existing = ContactDataProvider.DATABASE.get(0);
+        Contact existing = getAnyExistingContact();
         Contact duplicate = new Contact(null, "Another Person", "Street", "City", "Country", existing.getPhone(), "new@example.com");
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> provider.persist(duplicate));
@@ -76,7 +76,7 @@ public class ContactDataProviderTest {
 
     @Test
     public void testPersist_outdatedLastModified_throwsException() {
-        Contact original = ContactDataProvider.DATABASE.get(0);
+        Contact original = getAnyExistingContact();
         Instant outdated = original.getLastModified().minusSeconds(60); // simulate stale timestamp
 
         Contact updated = new Contact(original.getId(), "Conflict Name", original.getStreet(), original.getCity(), original.getCountry(), original.getPhone(), original.getEmail());
@@ -88,7 +88,7 @@ public class ContactDataProviderTest {
 
     @Test
     public void testDelete_removesContact() {
-        Contact toDelete = ContactDataProvider.DATABASE.get(0);
+        Contact toDelete = getAnyExistingContact();
         provider.delete(toDelete);
 
         Optional<Contact> result = provider.find(toDelete.getId());
@@ -98,10 +98,17 @@ public class ContactDataProviderTest {
 
     @Test
     public void testFind_returnsCorrectContact() {
-        Contact sample = ContactDataProvider.DATABASE.get(0);
-        Optional<Contact> found = provider.find(sample.getId());
+        Contact correctContact = getAnyExistingContact();
+        Optional<Contact> found = provider.find(correctContact.getId());
 
         assertTrue(found.isPresent());
-        assertEquals(sample.getName(), found.get().getName());
+        assertEquals(correctContact.getName(), found.get().getName());
     }
+
+    private Contact getAnyExistingContact() {
+        return ContactDataProvider.DATABASE.values().stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No contacts in database"));
+    }
+
 }
