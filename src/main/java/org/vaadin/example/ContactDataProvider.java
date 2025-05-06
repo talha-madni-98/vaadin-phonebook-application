@@ -144,11 +144,6 @@ public class ContactDataProvider
         contactMap.put(1, new Contact(1, "Alice Johnson", "123 Maple St", "Los Angeles", "USA", "2134567890", "alice.johnson@example.com"));
         contactMap.put(2, new Contact(2, "Bob Smith", "45 King Road", "Chicago", "USA", "3129876543", "bob.smith@example.com"));
         contactMap.put(3, new Contact(3, "Charlie Davis", "78 Oak Avenue", "Houston", "USA", "7134563210", "charlie.davis@example.com"));
-        contactMap.put(4, new Contact(4, "Diana Moore", "9 Elm Street", "San Francisco", "USA", "4157654321", "diana.moore@example.com"));
-        contactMap.put(5, new Contact(5, "Ethan Brown", "150 River Blvd", "New York", "USA", "9172345678", "ethan.brown@example.com"));
-        contactMap.put(6, new Contact(6, "Fiona White", "222 Sunset Dr", "Miami", "USA", "3056781234", "fiona.white@example.com"));
-        contactMap.put(7, new Contact(7, "George Miller", "300 Pine Lane", "Seattle", "USA", "2068904321", "george.miller@example.com"));
-        contactMap.put(8, new Contact(8, "Hannah Green", "10 Cedar Circle", "Boston", "USA", "6174560987", "hannah.green@example.com"));
         return contactMap;
     }
 }
