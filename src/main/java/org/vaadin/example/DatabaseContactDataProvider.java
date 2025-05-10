@@ -203,17 +203,7 @@ public class DatabaseContactDataProvider extends AbstractBackEndDataProvider<Con
              ResultSet rs = statement.executeQuery()) {
 
             while (rs.next()) {
-                Contact contact = new Contact();
-                contact.setId(rs.getInt("id"));
-                contact.setName(rs.getString("name"));
-                contact.setStreet(rs.getString("street"));
-                contact.setCity(rs.getString("city"));
-                contact.setCountry(rs.getString("country"));
-                contact.setEmail(rs.getString("email"));
-                contact.setPhone(rs.getString("phone"));
-                contact.setLastModified(rs.getTimestamp("last_modified").toInstant());
-
-                contacts.add(contact);
+                contacts.add(mapRow(rs));
             }
 
         } catch (SQLException e) {
